@@ -1,58 +1,59 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-require('dotenv').config();
-const axios = require('axios');
+const express = require("express");
+const axios = require("axios");
+const cors = require("cors");
+require("dotenv").config();
 
 const app = express();
-const port = process.env.PORT || 3000;
-
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-app.post('/create-payment', async (req, res) => {
-  const { amount, wallet } = req.body;
+const apiKey = process.env.NOWPAYMENTS_API_KEY;
+const tokenContractAddress = process.env.TOKEN_CONTRACT_ADDRESS;
+const walletReceiverAddress = process.env.WALLET_RECEIVER_ADDRESS;
 
-  if (!amount || !wallet) {
-    return res.status(400).json({ message: 'Missing amount or wallet address' });
+app.post("/api/buy", async (req, res) => {
+  const { amount, address } = req.body;
+
+  if (!amount || !address) {
+    return res.status(400).json({ error: "Missing amount or address" });
   }
 
-  // 1 EVAT = 0.01 USD (beállított logika)
-  const tokenPriceInUSD = 0.01;
-  const totalUSD = Number(amount) * tokenPriceInUSD;
+  const pricePerTokenUSD = 0.01;
+  const totalPriceUSD = amount * pricePerTokenUSD;
 
   try {
     const paymentResponse = await axios.post(
-      'https://api.nowpayments.io/v1/invoice',
+      "https://api.nowpayments.io/v1/invoice",
       {
-        price_amount: totalUSD,
-        price_currency: 'usd',
-        pay_currency: 'matic',
-        ipn_callback_url: 'https://yourdomain.com/ipn', // nem kötelező, de később jó lehet
-        order_id: `EVAT-${Date.now()}`,
-        order_description: `Purchase of ${amount} EVAT tokens`,
-        success_url: 'https://evatlabs.com/success',
-        cancel_url: 'https://evatlabs.com/cancel',
-        buyer_email: '', // opcionális
-        customer: wallet // fontos: ide a walletet mentjük meg
+        price_amount: totalPriceUSD,
+        price_currency: "usd",
+        pay_currency: "matic",
+        order_id: `evat-${Date.now()}`,
+        order_description: `${amount} EVAT token purchase`,
+        ipn_callback_url: "https://your-site.com/callback",
+        success_url: "https://evatlabs.com/success",
+        cancel_url: "https://evatlabs.com/cancel",
+        payout_address: walletReceiverAddress,
+        is_fixed_rate: true
       },
       {
         headers: {
-          'x-api-key': process.env.NOWPAYMENTS_API_KEY,
-          'Content-Type': 'application/json'
+          "x-api-key": apiKey,
+          "Content-Type": "application/json"
         }
       }
     );
 
     const invoiceUrl = paymentResponse.data.invoice_url;
-    res.json({ invoice_url: invoiceUrl });
-
-  } catch (error) {
-    console.error('NOWPayments error:', error.response?.data || error.message);
-    res.status(500).json({ message: 'NOWPayments API error' });
+    res.json({ url: invoiceUrl });
+  } catch (err) {
+    console.error("NOWPayments error:", err.response?.data || err.message);
+    res.status(500).json({ error: "NOWPayments API error" });
   }
 });
 
-app.listen(port, () => {
-  console.log(`EVAT Token backend server running on port ${port}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
+
