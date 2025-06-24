@@ -1,19 +1,12 @@
-// ✅ 1. LÉPÉS – Teljes backend szerver fájl NOWPayments fizetéshez (Render.com-ra)
-
-const express = require('express');
 require('dotenv').config();
-const app = express();
-const fetch = require('node-fetch');
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
 
+const app = express();
+app.use(cors()); // Engedélyez minden domaint
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
-app.get('/', (req, res) => {
-  res.send('EVAT Token Server is running!');
-});
-
-// ✅ 2. Token vásárlás – csak invoice generálás, nincs payout_address
 app.post('/create-payment', async (req, res) => {
   const { amount, wallet } = req.body;
 
@@ -21,40 +14,35 @@ app.post('/create-payment', async (req, res) => {
     return res.status(400).json({ error: 'Missing amount or wallet address' });
   }
 
-  const usdAmount = parseFloat(amount) * 0.0136;
-
-  const invoiceData = {
-    price_amount: usdAmount,
-    price_currency: "usd",
-    pay_currency: "usdttrc20",
-    order_description: `EWAT Token Purchase (${amount} tokens)`,
-    is_fixed_rate: true,
-    success_url: "https://evatlabs.com/success",
-    cancel_url: "https://evatlabs.com/cancel"
-  };
-
   try {
-    const response = await fetch("https://api.nowpayments.io/v1/invoice", {
-      method: "POST",
+    const response = await axios.post('https://api.nowpayments.io/v1/invoice', {
+      price_amount: amount * 0.01, // 1 EVAT = 0.01 USD
+      price_currency: 'usd',
+      pay_currency: 'matic', // vagy 'eth', 'usdt', amit támogat
+      order_id: 'evat-' + Date.now(),
+      order_description: `EVAT Token Purchase - ${amount} tokens`,
+      payout_address: wallet,
+      is_fixed_rate: true
+    }, {
       headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.NOWPAYMENTS_API_KEY
-      },
-      body: JSON.stringify(invoiceData)
+        'x-api-key': process.env.NOW_API_KEY,
+        'Content-Type': 'application/json'
+      }
     });
 
-    const data = await response.json();
-    if (data.invoice_url) {
-      res.json({ invoice_url: data.invoice_url });
-    } else {
-      res.status(500).json({ error: "Invoice creation failed", details: data });
-    }
-  } catch (err) {
-    console.error("Error creating invoice:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    const invoiceUrl = response.data.invoice_url;
+    return res.json({ invoice_url: invoiceUrl });
+
+  } catch (error) {
+    console.error('NOWPayments error:', error.response?.data || error.message);
+    return res.status(500).json({
+      error: 'Invoice creation failed',
+      details: error.response?.data || error.message
+    });
   }
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
