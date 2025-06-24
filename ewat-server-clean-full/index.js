@@ -1,3 +1,5 @@
+// ✅ 1. LÉPÉS – Teljes backend szerver fájl NOWPayments fizetéshez (Render.com-ra)
+
 const express = require('express');
 require('dotenv').config();
 const app = express();
@@ -11,7 +13,7 @@ app.get('/', (req, res) => {
   res.send('EVAT Token Server is running!');
 });
 
-// ÚJ: Token vásárlás végpont
+// ✅ 2. Token vásárlás – csak invoice generálás, nincs payout_address
 app.post('/create-payment', async (req, res) => {
   const { amount, wallet } = req.body;
 
@@ -26,9 +28,9 @@ app.post('/create-payment', async (req, res) => {
     price_currency: "usd",
     pay_currency: "usdttrc20",
     order_description: `EWAT Token Purchase (${amount} tokens)`,
-    payout_address: wallet,
-    payout_currency: "matic",
-    is_fixed_rate: true
+    is_fixed_rate: true,
+    success_url: "https://evatlabs.com/success",
+    cancel_url: "https://evatlabs.com/cancel"
   };
 
   try {
