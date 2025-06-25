@@ -1,59 +1,75 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
-require("dotenv").config();
+const express = require('express');
+const axios = require('axios');
+const cors = require('cors');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const apiKey = process.env.NOWPAYMENTS_API_KEY;
-const tokenContractAddress = process.env.TOKEN_CONTRACT_ADDRESS;
-const walletReceiverAddress = process.env.WALLET_RECEIVER_ADDRESS;
+const PORT = process.env.port || 3000;
 
-app.post("/api/buy", async (req, res) => {
-  const { amount, address } = req.body;
+const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
+const TOKEN_CONTRACT_ADDRESS = process.env.TOKEN_CONTRACT_ADDRESS;
+const WALLET_RECEIVER_ADDRESS = process.env.WALLET_RECEIVER_ADDRESS;
 
-  if (!amount || !address) {
-    return res.status(400).json({ error: "Missing amount or address" });
-  }
+// 💰 Token ára fixen 0.01 USD
+const TOKEN_PRICE_USD = 0.01;
+// 🛑 Maximális engedélyezett vásárlási érték USD-ben
+const MAX_PURCHASE_USD = 10000;
 
-  const pricePerTokenUSD = 0.01;
-  const totalPriceUSD = amount * pricePerTokenUSD;
-
+app.post('/buy-token', async (req, res) => {
   try {
-    const paymentResponse = await axios.post(
-      "https://api.nowpayments.io/v1/invoice",
-      {
-        price_amount: totalPriceUSD,
-        price_currency: "usd",
-        pay_currency: "matic",
-        order_id: `evat-${Date.now()}`,
-        order_description: `${amount} EVAT token purchase`,
-        ipn_callback_url: "https://your-site.com/callback",
-        success_url: "https://evatlabs.com/success",
-        cancel_url: "https://evatlabs.com/cancel",
-        payout_address: walletReceiverAddress,
-        is_fixed_rate: true
-      },
+    const { amount } = req.body;
+
+    if (!amount || isNaN(amount)) {
+      return res.status(400).json({ error: 'Érvénytelen tokenmennyiség.' });
+    }
+
+    const usdTotal = amount * TOKEN_PRICE_USD;
+
+    if (usdTotal > MAX_PURCHASE_USD) {
+      return res.status(400).json({
+        error: `Egyszerre maximum $${MAX_PURCHASE_USD} értékű tokent vásárolhatsz. Ez most $${usdTotal.toFixed(2)} lenne.`
+      });
+    }
+
+    const paymentRequest = {
+      price_amount: usdTotal,
+      price_currency: 'usd',
+      pay_currency: 'matic',
+      order_id: `EVAT-${Date.now()}`,
+      payee_address: WALLET_RECEIVER_ADDRESS,
+      is_fixed_rate: true,
+      ipn_callback_url: "https://yourdomain.com/ipn" // ha nincs, törölhető
+    };
+
+    const response = await axios.post(
+      'https://api.nowpayments.io/v1/invoice',
+      paymentRequest,
       {
         headers: {
-          "x-api-key": apiKey,
-          "Content-Type": "application/json"
+          'x-api-key': NOWPAYMENTS_API_KEY,
+          'Content-Type': 'application/json'
         }
       }
     );
 
-    const invoiceUrl = paymentResponse.data.invoice_url;
-    res.json({ url: invoiceUrl });
+    res.status(200).json({
+      message: 'Sikeres kérés',
+      invoice_url: response.data.invoice_url
+    });
+
   } catch (err) {
-    console.error("NOWPayments error:", err.response?.data || err.message);
-    res.status(500).json({ error: "NOWPayments API error" });
+    console.error('Hiba a vásárlás során:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Szerverhiba. Kérlek, próbáld újra később.' });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.get('/', (req, res) => {
+  res.send('EVAT Token Vásárló Backend él.');
 });
 
+app.listen(PORT, () => {
+  console.log(`Szerver fut a ${PORT}-as porton`);
+});
