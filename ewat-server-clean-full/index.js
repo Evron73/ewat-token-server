@@ -1,39 +1,30 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const cors = require('cors');
-const axios = require('axios');
-require('dotenv').config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// ✅ Teszteléshez a főoldal (Renderhez kell)
+// Teszt GET endpoint
 app.get('/', (req, res) => {
-  res.send('Server is running properly.');
+  res.send('EVAT Token server is running!');
 });
 
-// ✅ Token vásárlási logika (példa)
-app.post('/buy-token', async (req, res) => {
-  try {
-    const { walletAddress, amount } = req.body;
+// POST endpoint token vásárláshoz
+app.post('/buy-token', (req, res) => {
+  const { walletAddress, amount } = req.body;
 
-    if (!walletAddress || !amount) {
-      return res.status(400).json({ error: 'Missing walletAddress or amount' });
-    }
-
-    // Itt helyettesítsd be a saját logikád
-    console.log(`Vásárlás: ${amount} token a következő címre: ${walletAddress}`);
-
-    // Tesztválasz
-    res.status(200).json({ message: 'Token purchase simulated successfully.' });
-  } catch (err) {
-    console.error('Hiba a /buy-token végponton:', err);
-    res.status(500).json({ error: 'Szerverhiba' });
+  if (!walletAddress || !amount) {
+    return res.status(400).json({ error: 'Missing walletAddress or amount' });
   }
+
+  console.log(`Received purchase request for ${amount} tokens to ${walletAddress}`);
+  return res.status(200).json({ message: 'Token purchase request received.' });
 });
 
-// ✅ A Render által megadott portot használd
-const PORT = process.env.PORT || 3000;
+// A Render saját portját használjuk
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Szerver fut a ${PORT}-on`);
+  console.log(`Server is running on port ${PORT}`);
 });
