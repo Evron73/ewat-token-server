@@ -1,3 +1,6 @@
+app.get('/', (req, res) => {
+  res.send('Server is running properly.');
+});
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
