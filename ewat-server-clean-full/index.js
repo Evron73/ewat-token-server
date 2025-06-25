@@ -1,64 +1,42 @@
 const express = require('express');
-const axios    = require('axios');
-const cors     = require('cors');
+const cors = require('cors');
+const axios = require('axios');
 require('dotenv').config();
 
-const app  = express();
-const PORT = process.env.port || 3000;
+const app = express();
 
-/* ---- CORS csak POST-ra, teszthez engedjük a Wix domaint is ---- */
-app.use(cors({
-  origin: ['https://www.evatlabs.com', 'https://evatlabs.com', '*'],
-  methods: ['POST'],
-  allowedHeaders: ['Content-Type']
-}));
-
+// Engedélyezzük a CORS-t és JSON kezelést
+app.use(cors());
 app.use(express.json());
 
-/* ---- Konstansok ---- */
-const NOWPAYMENTS_API_KEY  = process.env.NOWPAYMENTS_API_KEY;
-const WALLET_RECEIVER_ADDR = process.env.WALLET_RECEIVER_ADDRESS;
-const TOKEN_PRICE_USD      = 0.01;
-const MAX_PURCHASE_USD     = 10000;
+// Teszt route: ellenőrizd, hogy a szerver él-e
+app.get('/', (req, res) => {
+  res.send('EWAT token server is running');
+});
 
-/* ---- API: POST /buy-token ---- */
+// Vásárlási végpont (pl. NOWPayments API integrációhoz később)
 app.post('/buy-token', async (req, res) => {
   try {
-    const amount = parseInt(req.body.amount, 10);
+    const { walletAddress, tokenAmount } = req.body;
 
-    if (!amount || isNaN(amount)) {
-      return res.status(400).json({ error: 'Érvénytelen tokenmennyiség.' });
+    if (!walletAddress || !tokenAmount) {
+      return res.status(400).json({ success: false, message: 'Missing data' });
     }
 
-    const usdTotal = amount * TOKEN_PRICE_USD;
-    if (usdTotal > MAX_PURCHASE_USD) {
-      return res.status(400).json({ error:
-        `Egyszerre max $${MAX_PURCHASE_USD}. (Most: $${usdTotal.toFixed(2)})` });
-    }
+    // Itt jön majd a NOWPayments logika – ideiglenes válasz:
+    return res.status(200).json({
+      success: true,
+      message: `Purchase request received for ${tokenAmount} tokens to ${walletAddress}`
+    });
 
-    /* NOWPayments invoice */
-    const invoiceRes = await axios.post(
-      'https://api.nowpayments.io/v1/invoice',
-      {
-        price_amount:     usdTotal,
-        price_currency:   'usd',
-        pay_currency:     'matic',
-        order_id:         `EVAT-${Date.now()}`,
-        payee_address:    WALLET_RECEIVER_ADDR,
-        is_fixed_rate:    true
-      },
-      { headers: { 'x-api-key': NOWPAYMENTS_API_KEY, 'Content-Type': 'application/json' } }
-    );
-
-    res.json({ invoice_url: invoiceRes.data.invoice_url });
-
-  } catch (err) {
-    console.error('buy-token error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Szerverhiba.' });
+  } catch (error) {
+    console.error('Buy-token error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
   }
 });
 
-/* ---- Root teszt ---- */
-app.get('/', (_req, res) => res.send('EVAT backend él ▸ /buy-token'));
-
-app.listen(PORT, () => console.log(`💡 Szerver fut a ${PORT}-on`));
+// Indítjuk a szervert
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Szerver fut a ${PORT}-on`);
+});
