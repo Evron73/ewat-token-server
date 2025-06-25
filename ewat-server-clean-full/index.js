@@ -4,38 +4,21 @@ const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
-
-// Engedélyezzük a CORS-t és JSON kezelést
 app.use(cors());
 app.use(express.json());
 
-// Teszt route: ellenőrizd, hogy a szerver él-e
+// Teszt route (ellenőrzéshez)
 app.get('/', (req, res) => {
-  res.send('EWAT token server is running');
+  res.send('Server is running properly.');
 });
 
-// Vásárlási végpont (pl. NOWPayments API integrációhoz később)
-app.post('/buy-token', async (req, res) => {
-  try {
-    const { walletAddress, tokenAmount } = req.body;
-
-    if (!walletAddress || !tokenAmount) {
-      return res.status(400).json({ success: false, message: 'Missing data' });
-    }
-
-    // Itt jön majd a NOWPayments logika – ideiglenes válasz:
-    return res.status(200).json({
-      success: true,
-      message: `Purchase request received for ${tokenAmount} tokens to ${walletAddress}`
-    });
-
-  } catch (error) {
-    console.error('Buy-token error:', error.message);
-    res.status(500).json({ success: false, error: 'Internal Server Error' });
-  }
+// Ide jön majd a crypto fizetés API endpoint
+app.post('/buy', async (req, res) => {
+  // Ide jön a vásárlási logika később
+  res.json({ message: 'Buy endpoint működik' });
 });
 
-// Indítjuk a szervert
+// ⚠️ Ne írd fixen a 3000-es portot!
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Szerver fut a ${PORT}-on`);
