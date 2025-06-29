@@ -1,58 +1,61 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const cors = require("cors");
-const axios = require("axios");
+const Web3 = require("web3");
+require("dotenv").config();
 
 const app = express();
-app.use(cors());
 app.use(bodyParser.json());
 
-const NOWPAYMENTS_API_KEY = '83ADNBV-3QH4B8K-M7CXZNE-H4E56XM';
-const TOKEN_PRICE_USD = 0.01;
+const web3 = new Web3(process.env.WEB3_PROVIDER);
+const account = web3.eth.accounts.privateKeyToAccount(process.env.PRIVATE_KEY);
+web3.eth.accounts.wallet.add(account);
 
-const PORT = process.env.PORT || 10000;
+const tokenAbi = [
+  {
+    constant: false,
+    inputs: [
+      { name: "_to", type: "address" },
+      { name: "_value", type: "uint256" }
+    ],
+    name: "transfer",
+    outputs: [{ name: "", type: "bool" }],
+    type: "function"
+  }
+];
 
-app.get("/", (req, res) => {
-  res.send("EVAT Token Server running");
-});
+const tokenContract = new web3.eth.Contract(tokenAbi, process.env.TOKEN_CONTRACT);
 
-app.post("/buy-token", async (req, res) => {
-  const { walletAddress, amount } = req.body;
-
-  if (!walletAddress || !amount) {
-    return res.status(400).json({ error: "Missing walletAddress or amount" });
+app.post("/webhook", async (req, res) => {
+  const signature = req.headers["x-nowpayments-sig"];
+  if (signature !== process.env.IPN_SECRET) {
+    return res.sendStatus(403);
   }
 
-  const usdAmount = amount * TOKEN_PRICE_USD;
+  const payment = req.body;
+  if (payment.payment_status !== "finished") {
+    return res.sendStatus(200); // Wait until confirmed
+  }
+
+  const buyer = payment.order_description; // You can change this to a buyer wallet field
+  const tokenAmount = parseFloat(payment.price_amount) / 0.01;
 
   try {
-    const payment = await axios.post(
-      "https://api.nowpayments.io/v1/invoice",
-      {
-        price_amount: usdAmount,
-        price_currency: "usd",
-        pay_currency: "usdt", // vagy btc, eth, bármilyen elfogadott coin
-        order_description: `Buy ${amount} EVAT tokens for ${walletAddress}`,
-        ipn_callback_url: "https://evatlabs.com/ipn",
-        success_url: "https://evatlabs.com/success",
-        cancel_url: "https://evatlabs.com/cancel",
-      },
-      {
-        headers: {
-          "x-api-key": NOWPAYMENTS_API_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const tx = await tokenContract.methods
+      .transfer(buyer, web3.utils.toWei(tokenAmount.toString(), "ether"))
+      .send({ from: account.address, gas: 100000 });
 
-    res.json({ invoice_url: payment.data.invoice_url });
+    console.log("✅ Token sent:", tx.transactionHash);
+    res.sendStatus(200);
   } catch (err) {
-    console.error("NOWPayments Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create payment" });
+    console.error("❌ Transfer error:", err.message);
+    res.sendStatus(500);
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.get("/", (req, res) => {
+  res.send("EVAT Token Server is live");
 });
 
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Server listening on port", process.env.PORT || 3000);
+});
