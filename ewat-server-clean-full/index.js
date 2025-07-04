@@ -6,7 +6,7 @@ import Web3 from 'web3';
 dotenv.config();
 
 const {
-  PORT = 3000,
+  PORT = 10000,
   NOWPAYMENTS_API_KEY,
   WEB3_PROVIDER,
   PRIVATE_KEY,
@@ -16,12 +16,11 @@ const {
 const app = express();
 app.use(bodyParser.json());
 
-// Web3 setup
 const web3 = new Web3(WEB3_PROVIDER);
 const sender = web3.eth.accounts.privateKeyToAccount(PRIVATE_KEY);
 web3.eth.accounts.wallet.add(sender);
 
-// ERC20 Token ABI (rövid, csak 'transfer')
+// Token ABI (transfer)
 const tokenAbi = [
   {
     constant: false,
@@ -37,7 +36,7 @@ const tokenAbi = [
 
 const tokenContract = new web3.eth.Contract(tokenAbi, TOKEN_CONTRACT_ADDRESS);
 
-// 🟢 Webhook route
+// ✅ WEBHOOK route
 app.post('/webhook', async (req, res) => {
   try {
     const { payment_status, pay_address, amount } = req.body;
@@ -47,7 +46,7 @@ app.post('/webhook', async (req, res) => {
     }
 
     const recipient = pay_address;
-    const tokensToSend = parseInt(amount) * 10000; // 1 USD = 10,000 EVAT token
+    const tokensToSend = parseInt(amount) * 10000;
 
     const tx = await tokenContract.methods.transfer(recipient, tokensToSend).send({
       from: sender.address,
@@ -62,11 +61,12 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// ➕ GET route for root
+// Optional: Root GET
 app.get('/', (req, res) => {
-  res.send('EVAT Token Server is running ✅');
+  res.send('EVAT Token Server is online');
 });
 
 app.listen(PORT, () => {
   console.log(`🚀 EVAT token server listening on port :${PORT}`);
 });
+
