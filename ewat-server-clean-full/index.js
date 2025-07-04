@@ -16,66 +16,57 @@ const {
 const app = express();
 app.use(bodyParser.json());
 
+// Web3 setup
 const web3 = new Web3(WEB3_PROVIDER);
 const sender = web3.eth.accounts.privateKeyToAccount(PRIVATE_KEY);
 web3.eth.accounts.wallet.add(sender);
 
-const erc20Abi = [
+// ERC20 Token ABI (rövid, csak 'transfer')
+const tokenAbi = [
   {
-    "constant": false,
-    "name": "transfer",
-    "inputs": [
-      { "name": "_to", "type": "address" },
-      { "name": "_value", "type": "uint256" }
+    constant: false,
+    inputs: [
+      { name: '_to', type: 'address' },
+      { name: '_value', type: 'uint256' }
     ],
-    "outputs": [{ "name": "", "type": "bool" }],
-    "type": "function"
+    name: 'transfer',
+    outputs: [{ name: '', type: 'bool' }],
+    type: 'function'
   }
 ];
 
-const token = new web3.eth.Contract(erc20Abi, TOKEN_CONTRACT_ADDRESS);
+const tokenContract = new web3.eth.Contract(tokenAbi, TOKEN_CONTRACT_ADDRESS);
 
+// 🟢 Webhook route
 app.post('/webhook', async (req, res) => {
   try {
-    const sig = req.headers['x-nowpayments-sig'];
-    if (sig !== NOWPAYMENTS_API_KEY) {
-      return res.status(401).send('Invalid signature');
+    const { payment_status, pay_address, amount } = req.body;
+
+    if (payment_status !== 'confirmed') {
+      return res.status(200).send('Ignored non-confirmed payment');
     }
 
-    const {
-      payment_status,
-      pay_amount,
-      pay_address,
-      order_description
-    } = req.body;
+    const recipient = pay_address;
+    const tokensToSend = parseInt(amount) * 10000; // 1 USD = 10,000 EVAT token
 
-    if (payment_status !== 'finished') {
-      return res.status(200).send('Ignored – not finished');
-    }
+    const tx = await tokenContract.methods.transfer(recipient, tokensToSend).send({
+      from: sender.address,
+      gas: 100000
+    });
 
-    const rewardTable = {
-      'EVAT CORE': 33000,
-      'EVAT GROVE': 66000,
-      'EVAT GLOBE': 116600,
-      'EVAT MAG': 160000,
-      'EVAT NEXUS': 200000,
-      'EVAT QUANTUM': 300000
-    };
-
-    const amount = rewardTable[order_description?.toUpperCase()] ?? 0;
-    if (!web3.utils.isAddress(pay_address) || amount === 0) {
-      return res.status(400).send('Invalid address or product');
-    }
-
-    const tx = await token.methods.transfer(pay_address, amount)
-      .send({ from: sender.address, gas: 100000 });
-
-    console.log(`✅ Sent ${amount} EVAT to ${pay_address}. TxHash: ${tx.transactionHash}`);
-    return res.status(200).send('OK');
-  } catch (err) {
-    console.error('❌ Webhook error', err);
-    return res.status(500).send('Server error');
+    console.log(`✅ Token sent! TX Hash: ${tx.transactionHash}`);
+    res.status(200).send(`Sent ${tokensToSend} tokens to ${recipient}`);
+  } catch (error) {
+    console.error('❌ Token transfer failed:', error);
+    res.status(500).send('Token transfer error');
   }
 });
 
-app.listen(PORT, () => console.log(`EVAT token server listening on :${PORT}`));
+// ➕ GET route for root
+app.get('/', (req, res) => {
+  res.send('EVAT Token Server is running ✅');
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 EVAT token server listening on port :${PORT}`);
+});
