@@ -1,61 +1,81 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const Web3 = require("web3");
-require("dotenv").config();
+import express from 'express';
+import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
+import Web3 from 'web3';
+
+dotenv.config();
+
+const {
+  PORT = 3000,
+  NOWPAYMENTS_API_KEY,
+  WEB3_PROVIDER,
+  PRIVATE_KEY,
+  TOKEN_CONTRACT_ADDRESS
+} = process.env;
 
 const app = express();
 app.use(bodyParser.json());
 
-const web3 = new Web3(process.env.WEB3_PROVIDER);
-const account = web3.eth.accounts.privateKeyToAccount(process.env.PRIVATE_KEY);
-web3.eth.accounts.wallet.add(account);
+const web3 = new Web3(WEB3_PROVIDER);
+const sender = web3.eth.accounts.privateKeyToAccount(PRIVATE_KEY);
+web3.eth.accounts.wallet.add(sender);
 
-const tokenAbi = [
+const erc20Abi = [
   {
-    constant: false,
-    inputs: [
-      { name: "_to", type: "address" },
-      { name: "_value", type: "uint256" }
+    "constant": false,
+    "name": "transfer",
+    "inputs": [
+      { "name": "_to", "type": "address" },
+      { "name": "_value", "type": "uint256" }
     ],
-    name: "transfer",
-    outputs: [{ name: "", type: "bool" }],
-    type: "function"
+    "outputs": [{ "name": "", "type": "bool" }],
+    "type": "function"
   }
 ];
 
-const tokenContract = new web3.eth.Contract(tokenAbi, process.env.TOKEN_CONTRACT);
+const token = new web3.eth.Contract(erc20Abi, TOKEN_CONTRACT_ADDRESS);
 
-app.post("/webhook", async (req, res) => {
-  const signature = req.headers["x-nowpayments-sig"];
-  if (signature !== process.env.IPN_SECRET) {
-    return res.sendStatus(403);
-  }
-
-  const payment = req.body;
-  if (payment.payment_status !== "finished") {
-    return res.sendStatus(200); // Wait until confirmed
-  }
-
-  const buyer = payment.order_description; // You can change this to a buyer wallet field
-  const tokenAmount = parseFloat(payment.price_amount) / 0.01;
-
+app.post('/webhook', async (req, res) => {
   try {
-    const tx = await tokenContract.methods
-      .transfer(buyer, web3.utils.toWei(tokenAmount.toString(), "ether"))
-      .send({ from: account.address, gas: 100000 });
+    const sig = req.headers['x-nowpayments-sig'];
+    if (sig !== NOWPAYMENTS_API_KEY) {
+      return res.status(401).send('Invalid signature');
+    }
 
-    console.log("✅ Token sent:", tx.transactionHash);
-    res.sendStatus(200);
+    const {
+      payment_status,
+      pay_amount,
+      pay_address,
+      order_description
+    } = req.body;
+
+    if (payment_status !== 'finished') {
+      return res.status(200).send('Ignored – not finished');
+    }
+
+    const rewardTable = {
+      'EVAT CORE': 33000,
+      'EVAT GROVE': 66000,
+      'EVAT GLOBE': 116600,
+      'EVAT MAG': 160000,
+      'EVAT NEXUS': 200000,
+      'EVAT QUANTUM': 300000
+    };
+
+    const amount = rewardTable[order_description?.toUpperCase()] ?? 0;
+    if (!web3.utils.isAddress(pay_address) || amount === 0) {
+      return res.status(400).send('Invalid address or product');
+    }
+
+    const tx = await token.methods.transfer(pay_address, amount)
+      .send({ from: sender.address, gas: 100000 });
+
+    console.log(`✅ Sent ${amount} EVAT to ${pay_address}. TxHash: ${tx.transactionHash}`);
+    return res.status(200).send('OK');
   } catch (err) {
-    console.error("❌ Transfer error:", err.message);
-    res.sendStatus(500);
+    console.error('❌ Webhook error', err);
+    return res.status(500).send('Server error');
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("EVAT Token Server is live");
-});
-
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Server listening on port", process.env.PORT || 3000);
-});
+app.listen(PORT, () => console.log(`EVAT token server listening on :${PORT}`));
